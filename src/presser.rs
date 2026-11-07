@@ -4,8 +4,35 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 pub const HOLD: Duration = Duration::from_secs(2);
+pub const MIN_FIXED_HOLD: Duration = Duration::from_millis(100);
 pub const MIN_WAIT_SECS: u64 = 30;
 pub const MAX_WAIT_SECS: u64 = 60;
+
+/// How the presses are scheduled.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Schedule {
+    /// Hold for 2s after a random 30 to 60 second wait.
+    Random,
+    /// Press every fixed period (start to start) and hold for a random time within it.
+    Fixed(Duration),
+}
+
+impl Schedule {
+    /// Returns how long to hold the key and how long to wait after releasing it.
+    pub fn next(self) -> (Duration, Duration) {
+        match self {
+            Schedule::Random => (HOLD, random_wait()),
+            Schedule::Fixed(period) => {
+                let max = period.min(HOLD);
+                let min = MIN_FIXED_HOLD.min(max);
+                let hold = Duration::from_millis(
+                    rand::rng().random_range(min.as_millis() as u64..=max.as_millis() as u64),
+                );
+                (hold, period - hold)
+            }
+        }
+    }
+}
 
 /// Picks a random wait between the minimum and maximum interval.
 pub fn random_wait() -> Duration {
@@ -32,17 +59,17 @@ fn interruptible_sleep(total: Duration, stop: &AtomicBool) -> bool {
 
 /// Presses and holds the key at random intervals until the stop flag is raised.
 /// The key is always released before returning.
-pub fn run(key: Key, name: &str, stop: &AtomicBool) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(key: Key, name: &str, schedule: Schedule, stop: &AtomicBool) -> Result<(), Box<dyn std::error::Error>> {
     let mut enigo = Enigo::new(&Settings::default())?;
     loop {
-        let wait = random_wait();
-        log(&format!("Next press of {name} in {}s", wait.as_secs()));
+        let (hold, wait) = schedule.next();
+        log(&format!("Next press of {name} in {:.1}s", wait.as_secs_f64()));
         if !interruptible_sleep(wait, stop) {
             break;
         }
         enigo.key(key, Direction::Press)?;
-        log(&format!("Pressed {name}, holding for {}s", HOLD.as_secs()));
-        interruptible_sleep(HOLD, stop);
+        log(&format!("Pressed {name}, holding for {:.1}s", hold.as_secs_f64()));
+        interruptible_sleep(hold, stop);
         enigo.key(key, Direction::Release)?;
         log(&format!("Released {name}"));
     }
@@ -59,6 +86,23 @@ mod tests {
         for _ in 0..1000 {
             let w = random_wait().as_secs();
             assert!((MIN_WAIT_SECS..=MAX_WAIT_SECS).contains(&w));
+        }
+    }
+
+    #[test]
+    fn random_schedule_holds_two_seconds() {
+        assert_eq!(Schedule::Random.next().0, HOLD);
+    }
+
+    #[test]
+    fn fixed_schedule_keeps_the_period() {
+        for secs in [0.05, 1.0, 5.0] {
+            let period = Duration::from_secs_f64(secs);
+            for _ in 0..200 {
+                let (hold, wait) = Schedule::Fixed(period).next();
+                assert_eq!(hold + wait, period);
+                assert!(hold <= HOLD);
+            }
         }
     }
 
