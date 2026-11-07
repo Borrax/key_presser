@@ -12,6 +12,11 @@ pub fn random_wait() -> Duration {
     Duration::from_secs(rand::rng().random_range(MIN_WAIT_SECS..=MAX_WAIT_SECS))
 }
 
+/// Prints a message prefixed with the local time.
+fn log(msg: &str) {
+    println!("[{}] {msg}", chrono::Local::now().format("%H:%M:%S"));
+}
+
 /// Sleeps in short slices so a stop request is noticed quickly.
 /// Returns false if the stop flag was raised.
 fn interruptible_sleep(total: Duration, stop: &AtomicBool) -> bool {
@@ -27,14 +32,21 @@ fn interruptible_sleep(total: Duration, stop: &AtomicBool) -> bool {
 
 /// Presses and holds the key at random intervals until the stop flag is raised.
 /// The key is always released before returning.
-pub fn run(key: Key, stop: &AtomicBool) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(key: Key, name: &str, stop: &AtomicBool) -> Result<(), Box<dyn std::error::Error>> {
     let mut enigo = Enigo::new(&Settings::default())?;
-    while interruptible_sleep(random_wait(), stop) {
+    loop {
+        let wait = random_wait();
+        log(&format!("Next press of {name} in {}s", wait.as_secs()));
+        if !interruptible_sleep(wait, stop) {
+            break;
+        }
         enigo.key(key, Direction::Press)?;
-        println!("Holding the key");
+        log(&format!("Pressed {name}, holding for {}s", HOLD.as_secs()));
         interruptible_sleep(HOLD, stop);
         enigo.key(key, Direction::Release)?;
+        log(&format!("Released {name}"));
     }
+    log("Stopped");
     Ok(())
 }
 

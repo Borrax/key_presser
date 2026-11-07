@@ -19,7 +19,7 @@ fn main() {
     let flag = Arc::clone(&stop);
     ctrlc::set_handler(move || flag.store(true, Ordering::SeqCst)).expect("Could not set the Ctrl+C handler");
 
-    if let Err(e) = presser::run(key, &stop) {
+    if let Err(e) = presser::run(key, &name, &stop) {
         eprintln!("Error: {e}");
         std::process::exit(1);
     }
