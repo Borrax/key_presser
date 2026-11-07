@@ -1,9 +1,10 @@
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
-use enigo::Key;
 use std::io;
 
 /// Maps a terminal key code to the key that enigo can press.
-pub fn to_enigo(code: KeyCode) -> Option<Key> {
+#[cfg(not(windows))]
+pub fn to_enigo(code: KeyCode) -> Option<enigo::Key> {
+    use enigo::Key;
     Some(match code {
         KeyCode::Char(c) => Key::Unicode(c),
         KeyCode::Enter => Key::Return,
@@ -38,8 +39,13 @@ pub fn to_enigo(code: KeyCode) -> Option<Key> {
     })
 }
 
+/// Whether the key can be pressed on this platform.
+pub fn supported(code: KeyCode) -> bool {
+    crate::sender::resolve(code).is_some()
+}
+
 /// Blocks until the user presses a supported key and returns it with a printable name.
-pub fn capture() -> io::Result<(Key, String)> {
+pub fn capture() -> io::Result<(KeyCode, String)> {
     crossterm::terminal::enable_raw_mode()?;
     let result = loop {
         match event::read() {
@@ -48,8 +54,8 @@ pub fn capture() -> io::Result<(Key, String)> {
                     crossterm::terminal::disable_raw_mode()?;
                     std::process::exit(0);
                 }
-                if let Some(key) = to_enigo(k.code) {
-                    break Ok((key, format!("{:?}", k.code)));
+                if supported(k.code) {
+                    break Ok((k.code, format!("{:?}", k.code)));
                 }
             }
             Ok(_) => {}
@@ -60,9 +66,10 @@ pub fn capture() -> io::Result<(Key, String)> {
     result
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(windows)))]
 mod tests {
     use super::*;
+    use enigo::Key;
 
     #[test]
     fn maps_characters() {

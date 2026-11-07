@@ -1,4 +1,5 @@
-use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+use crate::sender::Sender;
+use crossterm::event::KeyCode;
 use rand::RngExt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -59,18 +60,18 @@ fn interruptible_sleep(total: Duration, stop: &AtomicBool) -> bool {
 
 /// Presses and holds the key at random intervals until the stop flag is raised.
 /// The key is always released before returning.
-pub fn run(key: Key, name: &str, schedule: Schedule, stop: &AtomicBool) -> Result<(), Box<dyn std::error::Error>> {
-    let mut enigo = Enigo::new(&Settings::default())?;
+pub fn run(key: KeyCode, name: &str, schedule: Schedule, stop: &AtomicBool) -> Result<(), Box<dyn std::error::Error>> {
+    let mut sender = Sender::new(key)?;
     loop {
         let (hold, wait) = schedule.next();
         log(&format!("Next press of {name} in {:.1}s", wait.as_secs_f64()));
         if !interruptible_sleep(wait, stop) {
             break;
         }
-        enigo.key(key, Direction::Press)?;
+        sender.press()?;
         log(&format!("Pressed {name}, holding for {:.1}s", hold.as_secs_f64()));
         interruptible_sleep(hold, stop);
-        enigo.key(key, Direction::Release)?;
+        sender.release()?;
         log(&format!("Released {name}"));
     }
     log("Stopped");

@@ -375,6 +375,7 @@ dependencies = [
  "ctrlc",
  "enigo",
  "rand",
+ "windows-sys",
 ]
 
 [[package]]

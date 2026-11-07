@@ -7,5 +7,10 @@ edition = "2024"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 crossterm = "0.29.0"
 ctrlc = "3.5.2"
-enigo = "0.6.1"
 rand = "0.10.3"
+
+[target."cfg(windows)".dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_UI_Input_KeyboardAndMouse"] }
+
+[target.'cfg(not(windows))'.dependencies]
+enigo = "0.6.1"
